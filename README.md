@@ -1,3 +1,3 @@
 Мой первый коммерческий проект. Полностью написан с нуля. АРМ для интернет-провайдера.
 
-Стек: NuxtJS v2, Vuetify v2, Apollo GraphQL, немного SCSS и CharJS
+Стек: NuxtJS v2, Vuetify v2, Apollo GraphQL, немного SCSS и ChartJS
