@@ -2,8 +2,8 @@
   <div>
     <RoutePanel :link-list="links" />
     <v-container class="box-container">
-      <v-data-table :loading="apolloLoading" :loading-text="'Идет загрузка данных...'" :headers="titles" :items="qControl"
-        class="elevation-1" hide-default-footer :page.sync="page" :items-per-page="itemsPerPage"
+      <v-data-table :loading="apolloLoading" :loading-text="'Идет загрузка данных...'" :headers="titles"
+        :items="qControl" class="elevation-1" hide-default-footer :page.sync="page" :items-per-page="itemsPerPage"
         @page-count="pageCount = $event">
         <template v-slot:top>
           <v-container>
@@ -40,8 +40,8 @@
           </v-dialog>
         </template>
         <template v-slot:item.statusButton="{ item }">
-          <v-simple-checkbox title="Вкл/Выкл" class="d-inline-block" color="primary darken-2" v-model="item.status" light
-            @click="switchStatus(item)"></v-simple-checkbox>
+          <v-simple-checkbox title="Вкл/Выкл" class="d-inline-block" color="primary darken-2" v-model="item.status"
+            light @click="switchStatus(item)"></v-simple-checkbox>
         </template>
         <template v-slot:item.editQControl="{ item }">
           <v-btn title="Редактировать" icon dark class="primary"
@@ -57,12 +57,90 @@
 </template>
 
 <script>
-import script from './script'
 import RoutePanel from '~/components/ButtonComponents/RoutePanel.vue'
 import RejectReasonCreate from '~/components/ButtonComponents/RejectReason/RejectReasonCreate.vue'
+import { QualityControlEdit } from '~/apollo/mutation/QualityControl'
+import QualityModel from '~/model/Quality/QualityModel'
 
 export default {
-  mixins: [script],
-  components: { RejectReasonCreate, RoutePanel }
+  components: { RejectReasonCreate, RoutePanel },
+  mixins: [QualityModel],
+  data() {
+    return {
+      page: 1,
+      pageCount: 0,
+      itemsPerPage: 10,
+      apolloLoading: true,
+      dialog: false,
+      editedQControl: {},
+      titles: [
+        { text: '', align: 'center', value: 'statusButton', sortable: false },
+        { text: 'Название', align: 'center', value: 'name' },
+        { text: 'Тип', align: 'center', value: 'type' },
+        { text: '', align: 'center', value: 'editQControl', sortable: false },
+      ],
+      links: [
+        { name: 'Органайзер', path: '/' },
+        { name: 'Причины отказа', path: '/rejectreasons' },
+      ],
+      qControl: [],
+      typeList: ['Качество', 'Покрытие', 'Отказ'],
+    }
+  },
+
+  async mounted() {
+    const { data, subscription } = await this.getQuality()
+    this.qControl = data
+    this.apolloLoading = this.$apollo.loading
+
+    subscription((data) => {
+      const idList = this.qControl.map(control => control.id)
+
+      if (!idList.includes(data.Subscription_QualityControl.id)) {
+        this.qControl.push(data.Subscription_QualityControl)
+      }
+      if (idList.includes(data.Subscription_QualityControl.id)) {
+        this.qControl = this.qControl.map(control => {
+          if (control.id === data.Subscription_QualityControl.id) {
+            control = data.Subscription_QualityControl
+          }
+
+          return control
+        })
+      }
+    })
+  },
+
+  methods: {
+    async switchStatus(item) {
+      this.apolloMutation(QualityControlEdit, {
+        param: {
+          status: item.status
+        },
+        idList: [item.id]
+      })
+    },
+
+    async editQControl(item) {
+      this.editedQControl = item
+      this.dialog = true
+    },
+
+    async save() {
+      this.apolloMutation(QualityControlEdit, {
+        param: {
+          name: this.editedQControl.name,
+          type: this.editedQControl.type
+        },
+        idList: [this.editedQControl.id]
+      })
+
+      this.dialog = false
+    },
+
+    async close() {
+      this.dialog = false
+    }
+  }
 }
 </script>

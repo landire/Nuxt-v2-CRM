@@ -18,12 +18,12 @@
               <v-col cols="12">
                 <v-text-field v-model="report.title" label="Тема" required></v-text-field>
                 <v-textarea required label="Описание" v-model="report.content" outlined auto-grow></v-textarea>
-                <v-file-input class="mb-3" clearable flat solo @change="selectImage" accept="image/*"
-                  ></v-file-input>
+                <v-file-input class="mb-3" clearable flat solo @change="selectImage" accept="image/*"></v-file-input>
                 <KeepAlive v-if="report.image !== undefined">
                   <v-row>
                     <v-col cols="4">
-                      <v-img class="d-inline-block" :src="report.image" width="100%" height="100%" aspect-ratio="1.8"></v-img>
+                      <v-img class="d-inline-block" :src="report.image" width="100%" height="100%"
+                        aspect-ratio="1.8"></v-img>
                     </v-col>
                   </v-row>
                 </KeepAlive>
@@ -44,7 +44,6 @@
 </template>
 
 <style scoped>
-
 .fixed {
   position: fixed;
   bottom: -25px;
@@ -53,9 +52,60 @@
 </style>
 
 <script>
-import script from './script'
+import { BagReportCreate } from '~/apollo/mutation/BagReport'
+import apollo from '~/mixins/apollo'
 
 export default {
-  mixins: [script]
+  mixins: [apollo],
+  data() {
+    return {
+      dialog: false,
+      report: {
+        title: '',
+        content: '',
+        image: undefined
+      },
+      blobImage: undefined
+    }
+  },
+
+  methods: {
+    async selectImage(image) {
+      if (image !== null && image !== undefined) {
+        this.report.image = URL.createObjectURL(image)
+        this.blobImage = image
+      } else {
+        this.report.image = undefined
+        this.blobImage = undefined
+      }
+    },
+
+    async imageToBase64(blob, callback) {
+      const reader = new FileReader()
+      reader.readAsDataURL(blob)
+      reader.onloadend = function () {
+        callback(reader.result)
+      }
+    },
+
+    async send() {
+      if (this.blobImage !== undefined && this.blobImage !== null) {
+        this.imageToBase64(this.blobImage, (data) => {
+          this.apolloMutation(BagReportCreate, {
+            tema: this.report.title,
+            text: this.report.content,
+            img: data,
+            parentBagreportId: this.$route.params.id
+          }).then(() => this.$refs.form.reset())
+        })
+      } else {
+        this.apolloMutation(BagReportCreate, {
+          tema: this.report.title,
+          text: this.report.content,
+          parentBagreportId: this.$route.params.id
+        }).then(() => this.$refs.form.reset())
+      }
+    },
+  }
 }
 </script>

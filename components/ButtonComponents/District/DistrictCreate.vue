@@ -35,9 +35,29 @@
 </template>
 
 <script>
-import script from './script'
+import { DistrictsCreate } from '~/apollo/mutation/Districts'
+import apollo from '~/mixins/apollo'
 
 export default {
-  mixins: [script]
+  mixins: [apollo],
+  data() {
+    return {
+      dialog: false,
+      name: '',
+    }
+  },
+
+  methods: {
+    async saveDistrict() {
+      this.apolloMutation(DistrictsCreate, {
+        param: {
+          name: this.name
+        }
+      })
+
+      this.$refs.form.reset()
+      this.dialog = false
+    }
+  }
 }
 </script>

@@ -2,15 +2,15 @@
   <div>
     <RoutePanel :link-list="links" />
     <v-container class="box-container">
-      <v-data-table :loading="apolloLoading" :loading-text="'Идет загрузка данных...'" :headers="titles" :search="search"
-        :custom-filter="filterAbons" :items="filteredAbons" class="elevation-1" hide-default-footer :page.sync="page"
-        :items-per-page="itemsPerPage" @page-count="pageCount = $event">
+      <v-data-table :loading="apolloLoading" :loading-text="'Идет загрузка данных...'" :headers="titles"
+        :search="search" :custom-filter="filterAbons" :items="filteredAbons" class="elevation-1" hide-default-footer
+        :page.sync="page" :items-per-page="itemsPerPage" @page-count="pageCount = $event">
 
         <template v-slot:top>
           <v-container>
             <v-toolbar flat>
-              <v-text-field prepend-inner-icon="mdi-magnify" label="Поиск" v-model="search" class="mt-7" outlined rounded
-                clearable></v-text-field>
+              <v-text-field prepend-inner-icon="mdi-magnify" label="Поиск" v-model="search" class="mt-7" outlined
+                rounded clearable></v-text-field>
               <v-select class="mt-7 ml-3 mr-3" outlined prepend-inner-icon="mdi-magnify" label="Поиск по ошибкам"
                 :items="errors" v-model="error" clearable rounded></v-select>
               <v-btn :disabled="!$store.state.permissionList.includes('MFIFilesAdmin') || loader === true"
@@ -99,11 +99,121 @@
 </template>
 
 <script>
-import script from './script'
 import RoutePanel from '~/components/ButtonComponents/RoutePanel.vue'
+import { UfmsCheckUFMSError } from '~/apollo/mutation/Ufms'
+import { AbonErrorEdit } from '~/apollo/mutation/AbonError'
+import { delay } from 'q'
+import AbonErrorModel from '~/model/AbonError/AbonErrorModel'
 
 export default {
-  mixins: [script],
-  components: { RoutePanel }
+  components: { RoutePanel },
+  mixins: [AbonErrorModel],
+  data() {
+    return {
+      page: 1,
+      pageCount: 0,
+      itemsPerPage: 25,
+      apolloLoading: true,
+      editAbonDialog: false,
+      errorsDialog: false,
+      passDataDialog: false,
+      loader: false,
+      search: "",
+      titles: [
+        { text: "Биллинг ID", align: "center", value: "billingAbonId" },
+        { text: "ФИО", align: "center", value: "full_name" },
+        { text: "Комментарий", align: "center", value: "coment" },
+        { text: "Пасспортные данные", align: "center", value: "passData", sortable: false },
+        { text: "Ошибки", align: "center", value: "errorsList", sortable: false },
+        { text: "", align: "center", value: "editAbon", sortable: false },
+      ],
+      links: [
+        { name: 'Органайзер', path: '/' },
+        { name: 'МФИ Файлы', path: '/mfi' },
+      ],
+      errors: [
+        "Необходимо заполнить день рождения",
+        "Необходимо заполнить не структурированные паспортные данные",
+        "Длина неструктурированных паспортных данных не может превышать 1024 символа",
+        "Не верно заполнена серия пасспорта - должно быть 4 цифры",
+        "Серия документа не должна превышать 16 символов",
+        "Не верно заполнена Номер пасспорта - должно быть 6 цифры",
+        "Номер документа не должна превышать 16 символов",
+        "Дата выдачи документа указанна не верно от 8 до 10 символов",
+        "Не верно указан код УФМС России. Пример: 900-003",
+        "Когда и кем выдан документ не должен превышать 512 символов",
+        "Указанного кода УФМС нет в справочнике",
+        "Необходимо правильно заполнить ФИО",
+        "Необходимо заполнить прописку или адрес проживания",
+        "Необходимо заполнить ИНН",
+        "Не верно указан банковский счет от 1 - 30 символов"
+      ],
+      error: "",
+      abons: [],
+      editedAbon: {},
+    };
+  },
+  async mounted() {
+    const { data, subscription } = await this.getAbonError()
+    this.abons = data
+    this.apolloLoading = this.$apollo.loading
+
+    subscription((data) => {
+      this.context.loader = false
+
+      const billingIdArray = this.context.abons.map(abon => abon.billingAbonId)
+      if (!billingIdArray.includes(data.Subscription_AbonError.billingAbonId)) {
+        this.context.abons.push(data.Subscription_AbonError)
+      }
+
+      if (billingIdArray.includes(data.Subscription_AbonError.billingAbonId)) {
+        this.context.abons = this.context.abons.map(abon => {
+          if (abon.billingAbonId === data.Subscription_AbonError.billingAbonId) {
+            abon = data.Subscription_AbonError
+          }
+
+          return abon
+        })
+      }
+    })
+  },
+  computed: {
+    filteredAbons() {
+      return this.abons.filter(abon => {
+        return !this.error || (abon.abonErrors.includes(this.error));
+      });
+    }
+  },
+  methods: {
+    filterAbons(value, search, item) {
+      return search === Array.prototype.slice.call(item.full_name, 0, search.length).join("")
+        || search === Array.prototype.slice.call(item.billingAbonId, 0, search.length).join("");
+    },
+    update() {
+      delay(this.loader = true, 5000).then(() => this.loader = false);
+      this.apolloMutation(UfmsCheckUFMSError);
+    },
+    async editAbon(item) {
+      this.editedAbon = item;
+      this.editAbonDialog = true;
+    },
+    async acceptEditAbon() {
+      this.apolloMutation(AbonErrorEdit, {
+        param: {
+          coment: this.editedAbon.coment
+        },
+        idList: [this.editedAbon.billingAbonId]
+      });
+      this.editAbonDialog = false;
+    },
+    async passData(item) {
+      this.editedAbon = item;
+      this.passDataDialog = true;
+    },
+    async errorList(item) {
+      this.editedAbon = item;
+      this.errorsDialog = true;
+    },
+  },
 }
 </script>
